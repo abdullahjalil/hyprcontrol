@@ -544,3 +544,16 @@ select:focus { box-shadow: 0 0 0 2px rgba(212,145,74,0.3); }
 
 /* ── Empty state ─────────────────────────────────────────────── */
 .empty { color: var(--muted); padding: 18px; font-size: 13px; text-align: center; }
+
+/* ── Apply bar ───────────────────────────────────────────────── */
+.apply-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--overlay);
+  border-radius: var(--radius);
+  padding: 12px 18px;
+  margin-bottom: 16px;
+  border-left: 3px solid var(--accent);
+  transition: opacity 0.2s;
+}

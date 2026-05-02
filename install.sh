@@ -3,16 +3,17 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "╔══════════════════════════════════════╗"
-echo "║     HyprControl 2 Installer          ║"
+echo "║      HyprControl Installer           ║"
 echo "╚══════════════════════════════════════╝"
 echo ""
 
 echo "→ Installing dependencies..."
 sudo pacman -S --needed --noconfirm \
-  python python-gobject python-flask gtk4 \
-  webkit2gtk-4.1 python-flask networkmanager bluez bluez-utils
+  python python-gobject python-flask \
+  gtk3 webkit2gtk-4.1 \
+  networkmanager bluez bluez-utils
 
-echo "  ✓ Done"
+echo "  ✓ Dependencies installed"
 
 echo "→ Installing app..."
 INSTALL_DIR="$HOME/.local/share/hyprcontrol"
@@ -28,6 +29,7 @@ cat > "$HOME/.local/bin/hyprcontrol" << LAUNCHER
 exec python3 "$INSTALL_DIR/main.py" "\$@"
 LAUNCHER
 chmod +x "$HOME/.local/bin/hyprcontrol"
+echo "  ✓ Launcher at ~/.local/bin/hyprcontrol"
 
 echo "→ Installing desktop entry..."
 mkdir -p "$HOME/.local/share/applications"
@@ -40,16 +42,24 @@ Icon=preferences-system
 Terminal=false
 Type=Application
 Categories=Settings;System;
+Keywords=settings;wifi;bluetooth;display;wallpaper;hyprland;
 StartupWMClass=hyprcontrol
 DESKTOP
+echo "  ✓ Desktop entry installed"
+
+# PATH check
+if ! echo "$PATH" | grep -q "$HOME/.local/bin"; then
+  echo ""
+  echo "  ⚠  Add to your ~/.zshrc:"
+  echo '     export PATH="$HOME/.local/bin:$PATH"'
+fi
 
 echo ""
 echo "╔══════════════════════════════════════╗"
-echo "║           All done!                  ║"
+echo "║           Installation done!         ║"
 echo "╚══════════════════════════════════════╝"
 echo ""
 echo "Run:  hyprcontrol"
-echo "Test: python3 $INSTALL_DIR/main.py"
 echo ""
 echo "Add keybind to hyprland.conf:"
 echo "  bind = SUPER, S, exec, hyprcontrol"

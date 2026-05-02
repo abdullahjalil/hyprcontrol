@@ -158,6 +158,19 @@ def appearance_set():
     if "cursor_size"  in data: appearance.set_cursor_size(int(data["cursor_size"]))
     return jsonify({"ok": True})
 
+@app.route("/api/appearance/apply", methods=["POST"])
+def appearance_apply():
+    data = request.json
+    appearance.apply_all(
+        gtk_theme    = data.get("gtk_theme"),
+        icon_theme   = data.get("icon_theme"),
+        cursor_theme = data.get("cursor_theme"),
+        cursor_size  = int(data["cursor_size"]) if "cursor_size" in data else None,
+        font         = data.get("font"),
+    )
+    return jsonify({"ok": True})
+
+
 
 # ── Power ─────────────────────────────────────────────────────
 @app.route("/api/power/suspend",   methods=["POST"])

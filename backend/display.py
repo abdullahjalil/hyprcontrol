@@ -2,7 +2,7 @@
 import subprocess
 import json
 import re
-from hyprcontrol.backend.hyprland import read_conf, CONF_PATH, reload
+from backend.hyprland import read_conf, CONF_PATH, reload
 
 
 def _run(cmd: list) -> str:

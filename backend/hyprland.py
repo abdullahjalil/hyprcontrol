@@ -168,27 +168,84 @@ def get_monitors() -> list:
 # ── Wallpaper ─────────────────────────────────────────────────
 
 def get_wallpaper_paths() -> list:
+    """Read path = lines from new block-format hyprpaper.conf."""
     if not HYPRPAPER_CONF.exists():
         return []
     content = HYPRPAPER_CONF.read_text()
-    paths = re.findall(r"wallpaper\s*=\s*[^,]+,\s*(.+)", content)
-    return [p.strip() for p in paths]
+    paths = re.findall(r"^\s*path\s*=\s*(.+)$", content, re.MULTILINE)
+    # Expand ~ and strip whitespace
+    result = []
+    for p in paths:
+        p = p.strip()
+        if p:
+            result.append(str(Path(p).expanduser()))
+    return result
 
 
 def set_wallpaper(path: str):
-    """Update hyprpaper.conf and reload hyprpaper."""
-    abs_path = str(Path(path).expanduser().resolve())
-    content = f"preload = {abs_path}\n"
-    # Apply to all monitors
-    monitors = get_monitors()
-    if monitors:
-        for m in monitors:
-            content += f"wallpaper = {m['name']},{abs_path}\n"
-    else:
-        content += f"wallpaper = ,{abs_path}\n"
-    HYPRPAPER_CONF.write_text(content)
-    # Reload hyprpaper
-    subprocess.Popen(["pkill", "hyprpaper"])
+    """Write new block-format hyprpaper.conf and apply via socket."""
     import time
-    time.sleep(0.3)
-    subprocess.Popen(["hyprpaper"])
+    import json
+
+    abs_path = str(Path(path).expanduser().resolve())
+
+    # Get actual active monitor names from hyprctl
+    monitor_names = []
+    try:
+        r = subprocess.run(
+            ["hyprctl", "monitors", "-j"],
+            capture_output=True, text=True, timeout=5
+        )
+        monitors = json.loads(r.stdout)
+        monitor_names = [m["name"] for m in monitors]
+    except Exception:
+        pass
+
+    # Build new block-format hyprpaper.conf
+    lines = []
+    for mon in monitor_names:
+        lines.append(f"wallpaper {{")
+        lines.append(f"    monitor = {mon}")
+        lines.append(f"    path = {abs_path}")
+        lines.append(f"    fit_mode = cover")
+        lines.append(f"}}")
+        lines.append("")
+
+    # Always add a fallback with empty monitor
+    lines.append(f"wallpaper {{")
+    lines.append(f"    monitor = ")
+    lines.append(f"    path = {abs_path}")
+    lines.append(f"    fit_mode = cover")
+    lines.append(f"}}")
+    lines.append("")
+
+    HYPRPAPER_CONF.write_text("\n".join(lines))
+
+    # Try live apply via hyprctl hyprpaper socket (no restart)
+    socket_ok = False
+    try:
+        # Preload
+        r = subprocess.run(
+            ["hyprctl", "hyprpaper", "preload", abs_path],
+            capture_output=True, text=True, timeout=5
+        )
+        if r.returncode == 0:
+            for mon in (monitor_names or [""]):
+                wp_arg = f"{mon},{abs_path}" if mon else abs_path
+                subprocess.run(
+                    ["hyprctl", "hyprpaper", "wallpaper", wp_arg],
+                    capture_output=True, text=True, timeout=5
+                )
+            socket_ok = True
+    except Exception:
+        pass
+
+    # Fallback: kill and restart hyprpaper with new conf
+    if not socket_ok:
+        subprocess.run(["pkill", "hyprpaper"], capture_output=True)
+        time.sleep(0.5)
+        subprocess.Popen(
+            ["hyprpaper"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
