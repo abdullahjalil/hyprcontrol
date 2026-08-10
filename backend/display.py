@@ -1,8 +1,8 @@
-"""Display backend — reads from hyprctl, writes to hyprland.conf"""
+"""Display backend — reads from hyprctl, persists format-aware (conf or lua)."""
 import subprocess
 import json
-import re
-from backend.hyprland import read_conf, CONF_PATH, reload
+from backend import hyprconf
+from backend.hyprland import reload
 
 
 def _run(cmd: list) -> str:
@@ -53,22 +53,24 @@ def get_available_modes(monitor_name: str) -> list:
 
 
 def set_monitor(name: str, resolution: str, refresh: int, scale: float, transform: int = 0):
-    """Update monitor = line in hyprland.conf."""
-    content = read_conf()
-    # Parse resolution
+    """Apply a monitor change live, then persist it in the active config's format."""
     res_str = f"{resolution}@{refresh}"
-    scale_str = str(scale)
+    directive = f"{name},{res_str},auto,{scale}"
 
-    pattern = rf"^(monitor\s*=\s*{re.escape(name)}\s*,).*$"
-    new_line = f"monitor = {name},{res_str},0x0,{scale_str}"
+    # Live apply — works on both .conf and .lua setups.
+    _run(["hyprctl", "keyword", "monitor", directive])
 
-    if re.search(pattern, content, re.MULTILINE):
-        content = re.sub(pattern, new_line, content, flags=re.MULTILINE)
+    # Persist into our managed 'monitors' block, in the matching syntax.
+    fmt = hyprconf.active_format()
+    if fmt == "lua":
+        body = (
+            "hl.monitor({ "
+            f'output = "{name}", mode = "{res_str}", '
+            f'position = "auto", scale = {scale} }})'
+        )
     else:
-        content += f"\n{new_line}\n"
-
-    CONF_PATH.write_text(content)
-    reload()
+        body = f"monitor = {directive}"
+    hyprconf.write_block("monitors", body)
 
 
 def set_vrr(monitor_name: str, state: bool):

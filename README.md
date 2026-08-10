@@ -47,8 +47,8 @@ No GTK widget styling fights. No config file spelunking for basic settings. Chan
 | **Display** | Resolution · refresh rate · scale · VRR · rotation |
 | **Audio** | Output / input device · volume · mute · PipeWire |
 | **Power** | Idle timeouts · lock · suspend · reboot · shutdown |
-| **Keyboard** | Layout · repeat delay · Caps→Esc · shortcut reference |
-| **Hyprland** | Borders · gaps · blur · animations · layout — **applied live** |
+| **Keyboard** | Layout · variant · repeat delay / rate · Caps→Esc · Num Lock · shortcut reference |
+| **Hyprland** | Borders · gaps · blur · animation speed / curve · touchpad · layout — **applied live** |
 
 ---
 
@@ -86,10 +86,16 @@ The installer copies files to `~/.local/share/hyprcontrol`, creates a launcher a
 hyprcontrol
 ```
 
-Add a keybind in `~/.config/hypr/hyprland.conf`:
+Add a keybind. If you're on the classic `hyprland.conf`:
 
 ```ini
 bind = SUPER, S, exec, hyprcontrol
+```
+
+Or, on a Hyprland 0.55+ Lua config (`hyprland.lua`):
+
+```lua
+hl.bind("SUPER + S", hl.dsp.exec_cmd("hyprcontrol"))
 ```
 
 ---
@@ -119,6 +125,28 @@ bind = SUPER, S, exec, hyprcontrol
 - **`server.py`** — Flask on `localhost:7779`; serves the UI files and a REST API
 - **`backend/`** — thin Python wrappers around system CLI tools
 - **`ui/`** — vanilla HTML / CSS / JS, no framework, Desert Dusk palette
+
+---
+
+## ◈ Hyprland 0.55+ / Lua configs
+
+Hyprland 0.55 deprecated the classic `hyprland.conf` (hyprlang) format in favour
+of a Lua config at `~/.config/hypr/hyprland.lua`. If a `.lua` file exists it is
+the active config and any `.conf` beside it is ignored.
+
+HyprControl handles both, transparently:
+
+- **Reads** go through `hyprctl getoption` / `hyprctl binds` / `hyprctl monitors`,
+  so the panels reflect your **live** settings no matter which format you use.
+- **Config detection** (`backend/hyprconf.py`) mirrors Hyprland's own rule —
+  Lua wins if present, else `.conf`. The active path and format are shown in the
+  Hyprland panel.
+- **Persistence** ("Save to config" in the Hyprland panel) writes a single,
+  clearly-delimited *managed block* in the matching syntax — `hl.config({…})` for
+  Lua, `key = value` for hyprlang — appended to your active config. Your own
+  hand-written config is never rewritten; the block is replaced in place on each
+  save. Live tweaks (sliders/toggles) still apply instantly via `hyprctl keyword`
+  without touching any file.
 
 ---
 

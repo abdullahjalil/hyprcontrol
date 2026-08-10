@@ -23,23 +23,40 @@ async function loadHyprland(container) {
 
   const animG = group("Animations");
   animG.appendChild(kwToggle("Enable Animations", "animations", data.animations));
-  animG.appendChild(row("Speed", null, slider(1, 10, 5, "", () => {})));
+
+  // Track current speed/bezier so changing one preserves the other.
+  let animSpeed  = data.anim ? data.anim.speed  : 5;
+  let animBezier = data.anim ? data.anim.bezier : "overshot";
+  const curves   = (data.anim && data.anim.curves) || ["overshot", "linear", "easeInOut", "bounce", "easeOutQuint"];
+
+  let animTimer;
+  function applyAnim() {
+    clearTimeout(animTimer);
+    animTimer = setTimeout(() => {
+      api.post("/api/hyprland/animation", { speed: animSpeed, bezier: animBezier });
+    }, 300);
+  }
+
+  animG.appendChild(row("Speed", "Higher is faster", slider(1, 10, animSpeed, "", v => {
+    animSpeed = Math.round(v); applyAnim();
+  })));
   animG.appendChild(row("Bezier Curve", null,
-    select(["overshot","linear","easeInOut","bounce","easeOutQuint"], "overshot", () => {})));
+    select(curves, animBezier, v => { animBezier = v; applyAnim(); toast("Curve: " + v); })));
   container.appendChild(animG);
 
   const inputG = group("Input Behaviour");
-  inputG.appendChild(kwToggle("Focus Follows Mouse",       "focus_mouse", data.focus_mouse));
-  inputG.appendChild(row("Scroll to Change Workspace", null, toggle(true, () => {})));
-  inputG.appendChild(row("Touchpad Gestures",          null, toggle(true, () => {})));
+  inputG.appendChild(kwToggle("Focus Follows Mouse", "focus_mouse", data.focus_mouse));
+  inputG.appendChild(kwToggle("Natural Scroll (Touchpad)", "natural_scroll", data.natural_scroll));
+  inputG.appendChild(kwToggle("Disable Touchpad While Typing", "disable_while_typing", data.disable_while_typing));
   inputG.appendChild(row("Tiling Layout", null,
-    select(["dwindle","master"], data.layout, async v => {
+    select(["dwindle", "master"], data.layout, async v => {
       await api.post("/api/hyprland/set", { layout: v }); toast("Layout changed");
     })));
   container.appendChild(inputG);
 
   const cfgG = group("Configuration");
-  cfgG.appendChild(row("Config File", data.config_path,
+  const fmtLabel = data.config_format === "lua" ? "Lua" : "hyprlang";
+  cfgG.appendChild(row("Config File", `${data.config_path}  ·  ${fmtLabel}`,
     [
       btn("Edit", "btn-ghost btn-sm", () => toast("Open in terminal: nvim " + data.config_path)),
       btn("Reload", "btn-accent btn-sm", async () => {
@@ -47,6 +64,25 @@ async function loadHyprland(container) {
         toast("✓ Hyprland config reloaded");
       }),
     ]
+  ));
+  cfgG.appendChild(row("Save current settings",
+    "Writes a managed block to your active config so tweaks survive a restart",
+    btn("Save to config", "btn-accent btn-sm", async () => {
+      // Persist the current live values (re-read so slider/toggle changes count).
+      const cur = await api.get("/api/hyprland/status");
+      const res = await api.post("/api/hyprland/save", {
+        border_size:   cur.border_size,
+        corner_radius: cur.corner_radius,
+        gaps_out:      cur.gaps_out,
+        blur:          cur.blur,
+        animations:    cur.animations,
+        focus_mouse:   cur.focus_mouse,
+        layout:        cur.layout,
+        natural_scroll:       cur.natural_scroll,
+        disable_while_typing: cur.disable_while_typing,
+      });
+      toast(res.ok ? `✓ Saved to ${fmtLabel} config` : "✗ Save failed");
+    })
   ));
   container.appendChild(cfgG);
 }

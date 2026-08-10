@@ -5,7 +5,6 @@ Serves the HTML UI and provides a JSON API for all system operations
 import os
 import sys
 import json
-import subprocess
 from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
@@ -197,26 +196,42 @@ def hyprland_status():
         "animations":     hyprland.get_animations_enabled(),
         "focus_mouse":    hyprland.get_focus_follows_mouse(),
         "layout":         hyprland.get_layout(),
+        "natural_scroll":       hyprland.get_touchpad_natural_scroll(),
+        "disable_while_typing": hyprland.get_disable_while_typing(),
+        "anim":           hyprland.get_animation_settings(),
         "config_path":    str(hyprland.get_config_path()),
+        "config_format":  hyprland.get_config_format(),
     })
 
 @app.route("/api/hyprland/set", methods=["POST"])
 def hyprland_set():
-    data = request.json
-    kw_map = {
-        "border_size":   "general:border_size",
-        "corner_radius": "decoration:rounding",
-        "gaps_out":      "general:gaps_out",
-        "blur":          "decoration:blur:enabled",
-        "animations":    "animations:enabled",
-        "focus_mouse":   "input:follow_mouse",
-        "layout":        "general:layout",
-    }
-    for key, kw in kw_map.items():
-        if key in data:
-            val = str(data[key])
-            subprocess.run(["hyprctl", "keyword", kw, val], capture_output=True)
+    data = request.json or {}
+    for key, val in data.items():
+        hyprland.apply_live(key, val)
     return jsonify({"ok": True})
+
+@app.route("/api/hyprland/animation", methods=["POST"])
+def hyprland_animation():
+    data = request.json or {}
+    hyprland.set_animation(
+        speed=int(data.get("speed", 5)),
+        bezier=data.get("bezier", "overshot"),
+    )
+    return jsonify({"ok": True})
+
+@app.route("/api/hyprland/save", methods=["POST"])
+def hyprland_save():
+    """Persist the given settings into the active config (conf or lua)."""
+    data = request.json or {}
+    allowed = {"border_size", "corner_radius", "gaps_out", "gaps_in",
+               "blur", "animations", "focus_mouse", "layout",
+               "natural_scroll", "disable_while_typing"}
+    settings = {k: v for k, v in data.items() if k in allowed}
+    if not settings:
+        return jsonify({"ok": False, "error": "no persistable settings"}), 400
+    path = hyprland.persist_settings(settings)
+    return jsonify({"ok": True, "path": path, "format": hyprland.get_config_format()})
+
 
 @app.route("/api/hyprland/reload", methods=["POST"])
 def hyprland_reload():
@@ -257,6 +272,21 @@ def wallpaper_set():
 
 
 # ── Keyboard ──────────────────────────────────────────────────
+@app.route("/api/keyboard/status")
+def keyboard_status():
+    return jsonify(keyboard.get_settings())
+
+@app.route("/api/keyboard/set", methods=["POST"])
+def keyboard_set():
+    data = request.json or {}
+    if "layout"       in data: keyboard.set_layout(data["layout"])
+    if "variant"      in data: keyboard.set_variant(data["variant"])
+    if "repeat_delay" in data: keyboard.set_repeat_delay(int(data["repeat_delay"]))
+    if "repeat_rate"  in data: keyboard.set_repeat_rate(int(data["repeat_rate"]))
+    if "caps_escape"  in data: keyboard.set_caps_escape(bool(data["caps_escape"]))
+    if "numlock"      in data: keyboard.set_numlock(bool(data["numlock"]))
+    return jsonify({"ok": True})
+
 @app.route("/api/keyboard/shortcuts")
 def keyboard_shortcuts():
     shortcuts = keyboard.get_shortcuts()
